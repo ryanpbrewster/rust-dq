@@ -4,26 +4,70 @@ extern crate structopt_derive;
 
 use structopt::StructOpt;
 
+extern crate rocksdb;
+use rocksdb::{DB, IteratorMode};
+
+extern crate byteorder;
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+
+use std::io::Cursor;
+
 #[derive(StructOpt, Debug)]
 #[structopt(name = "durable_queue", about = "Interact with a durable queue.")]
-enum Command {
+struct Command {
+    #[structopt(long = "db-path")]
+    db_path: String,
+    #[structopt(subcommand)]
+    op: Operation,
+}
+
+#[derive(StructOpt, Debug)]
+enum Operation {
     #[structopt(name = "list")]
     List,
     #[structopt(name = "push")]
     Push { strings: Vec<String> },
     #[structopt(name = "pop")]
-    Pop {
-        #[structopt(long = "dry-run")]
-        dry_run: bool,
-    },
+    Pop,
 }
 
 fn main() {
-    let cmd = Command::from_args();
+    let cmd: Command = Command::from_args();
 
+    let db = DB::open_default(cmd.db_path).expect("open rocksdb");
 
-    match cmd {
-        Command::List => println!("coming soon!"),
-        _ => unimplemented!(),
+    match cmd.op {
+        Operation::List => {
+            let iter = db.iterator(IteratorMode::Start);
+            for (key, value) in iter {
+                let k = Cursor::new(key).read_u64::<BigEndian>().expect(
+                    "parse u64 from rocksdb key",
+                );
+                let v = String::from_utf8(value.into_vec()).expect(
+                    "parse utf8 string from rocksdb value",
+                );
+                println!("{}: {}", k, v);
+            }
+        }
+        Operation::Push { strings } => {
+            let mut idx = {
+                let mut iter = db.iterator(IteratorMode::End);
+                iter.next().map(|(key, _)| {
+                    1 +
+                        Cursor::new(key).read_u64::<BigEndian>().expect(
+                            "parse u64 from rocksdb key",
+                        )
+                })
+            }.unwrap_or(0);
+            for v in strings {
+                let mut key = Vec::new();
+                key.write_u64::<BigEndian>(idx as u64).expect(
+                    "write u64 to big-endian bytes",
+                );
+                db.put(&key, v.as_bytes()).expect("writing data to rocksdb");
+                idx += 1;
+            }
+        }
+        Operation::Pop => unimplemented!(),
     };
 }
