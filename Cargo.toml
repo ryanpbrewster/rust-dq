@@ -1,0 +1,9 @@
+[package]
+name = "durable_queue"
+version = "0.1.0"
+authors = ["Ryan P. Brewster <RyanPBrewster@gmail.com>"]
+
+[dependencies]
+rocksdb = "0.8.1"
+structopt = "0.1.0"
+structopt-derive = "0.1.0"
