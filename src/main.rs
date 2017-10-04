@@ -31,6 +31,14 @@ enum Operation {
     Pop,
 }
 
+fn process(v: String) {
+    println!("[PROCESSING] {}", v);
+    println!(".");
+    println!(".");
+    println!(".");
+    println!("DONE!");
+}
+
 fn main() {
     let cmd: Command = Command::from_args();
 
@@ -61,13 +69,24 @@ fn main() {
             }.unwrap_or(0);
             for v in strings {
                 let mut key = Vec::new();
-                key.write_u64::<BigEndian>(idx as u64).expect(
+                key.write_u64::<BigEndian>(idx).expect(
                     "write u64 to big-endian bytes",
                 );
                 db.put(&key, v.as_bytes()).expect("writing data to rocksdb");
                 idx += 1;
             }
         }
-        Operation::Pop => unimplemented!(),
+        Operation::Pop => {
+            let item = {
+                db.iterator(IteratorMode::Start).next()
+            };
+            for (key, value) in item {
+                let v = String::from_utf8(value.into_vec()).expect(
+                    "parse utf8 string from rocksdb value",
+                );
+                process(v);
+                db.delete(key.as_ref()).expect("deleting data from rocksdb");
+            }
+        }
     };
 }
