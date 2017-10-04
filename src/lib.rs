@@ -79,4 +79,10 @@ impl DurableQueue {
             Some((key, value))
         }
     }
+
+    pub fn delete(&self, key: u64) {
+        self.db.delete(&DurableQueue::serialize_key(key)).expect(
+            "delete data from rocksdb",
+        );
+    }
 }

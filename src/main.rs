@@ -4,13 +4,8 @@ extern crate structopt_derive;
 
 use structopt::StructOpt;
 
-extern crate rocksdb;
-use rocksdb::{DB, IteratorMode};
-
-extern crate byteorder;
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-
-use std::io::Cursor;
+extern crate durable_queue;
+use durable_queue::DurableQueue;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "durable_queue", about = "Interact with a durable queue.")]
@@ -42,50 +37,21 @@ fn process(v: String) {
 fn main() {
     let cmd: Command = Command::from_args();
 
-    let db = DB::open_default(cmd.db_path).expect("open rocksdb");
+    let mut dq = DurableQueue::new(cmd.db_path);
 
     match cmd.op {
         Operation::List => {
-            let iter = db.iterator(IteratorMode::Start);
-            for (key, value) in iter {
-                let k = Cursor::new(key).read_u64::<BigEndian>().expect(
-                    "parse u64 from rocksdb key",
-                );
-                let v = String::from_utf8(value.into_vec()).expect(
-                    "parse utf8 string from rocksdb value",
-                );
-                println!("{}: {}", k, v);
-            }
+            dq.list();
         }
         Operation::Push { strings } => {
-            let mut idx = {
-                let mut iter = db.iterator(IteratorMode::End);
-                iter.next().map(|(key, _)| {
-                    1 +
-                        Cursor::new(key).read_u64::<BigEndian>().expect(
-                            "parse u64 from rocksdb key",
-                        )
-                })
-            }.unwrap_or(0);
             for v in strings {
-                let mut key = Vec::new();
-                key.write_u64::<BigEndian>(idx).expect(
-                    "write u64 to big-endian bytes",
-                );
-                db.put(&key, v.as_bytes()).expect("writing data to rocksdb");
-                idx += 1;
+                dq.push(v);
             }
         }
         Operation::Pop => {
-            let item = {
-                db.iterator(IteratorMode::Start).next()
-            };
-            for (key, value) in item {
-                let v = String::from_utf8(value.into_vec()).expect(
-                    "parse utf8 string from rocksdb value",
-                );
+            for (k, v) in dq.peek() {
                 process(v);
-                db.delete(key.as_ref()).expect("deleting data from rocksdb");
+                dq.delete(k)
             }
         }
     };
