@@ -6,6 +6,7 @@ use structopt::StructOpt;
 
 extern crate durable_queue;
 use durable_queue::DurableQueue;
+use durable_queue::rocks_dq::RocksDQ;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "durable_queue", about = "Interact with a durable queue.")]
@@ -37,7 +38,7 @@ fn process(v: String) {
 fn main() {
     let cmd: Command = Command::from_args();
 
-    let mut dq = DurableQueue::new(cmd.db_path);
+    let mut dq = RocksDQ::new(cmd.db_path);
 
     match cmd.op {
         Operation::List => {
